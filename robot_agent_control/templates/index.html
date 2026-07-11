@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <title>Physical AI Workspace Agent</title>
+    <meta name="description" content="Control a LeRobot SO-101 robot arm from browser or mobile. Run trained policies, trigger skills, and monitor status in real time.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Emergency Stop Bar -->
+    <div class="emergency-bar">
+        <button id="emergency-stop-btn" class="emergency-btn" onclick="emergencyStop()">
+            <span class="emergency-icon">⛔</span>
+            EMERGENCY STOP
+        </button>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="title">
+                <span class="title-icon">🤖</span>
+                Physical AI Workspace Agent
+            </h1>
+            <p class="subtitle">Intent → Tool Selection → Robot Skill</p>
+            <div class="status-bar">
+                <div id="status-indicator" class="status-dot status-idle"></div>
+                <span id="status-text" class="status-label">IDLE</span>
+                <span id="status-skill" class="status-skill"></span>
+                <span id="status-uptime" class="status-uptime"></span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <!-- Natural Language Control Card -->
+        <section class="card" id="nl-card">
+            <div class="card-header">
+                <span class="card-icon">🗣️</span>
+                <h2 class="card-title">Natural Language Control</h2>
+            </div>
+            <div class="card-body">
+                <p class="card-desc">Tell the agent what you need in plain English.</p>
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="nl-input"
+                        class="text-input"
+                        placeholder='e.g. "bring me the screwdriver" or "prep my workspace"'
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                    <button id="nl-interpret-btn" class="btn btn-primary" onclick="interpretText()">
+                        <span>Interpret</span>
+                    </button>
+                </div>
+                <div id="nl-result" class="intent-result hidden">
+                    <div id="nl-result-content" class="intent-content"></div>
+                    <button id="nl-confirm-btn" class="btn btn-success hidden" onclick="confirmInterpretedSkill()">
+                        ✅ Confirm Run
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Direct Skills Card -->
+        <section class="card" id="skills-card">
+            <div class="card-header">
+                <span class="card-icon">🎯</span>
+                <h2 class="card-title">Direct Skills</h2>
+            </div>
+            <div class="card-body">
+                <p class="card-desc">Run robot skills directly with one tap.</p>
+                <div class="skill-buttons">
+                    <div class="skill-row">
+                        <button id="skill-bring-btn" class="btn btn-accent btn-large" onclick="runSkill('bring_screwdriver_workspace')">
+                            🤖 Bring Screwdriver to Workspace
+                        </button>
+                        <button id="curl-copy-bring" class="btn btn-ghost btn-small" onclick="copyCurl('bring_screwdriver_workspace')" title="Copy curl command">
+                            📋 curl
+                        </button>
+                    </div>
+                    <div class="skill-row">
+                        <button id="skill-dryrun-btn" class="btn btn-outline" onclick="dryRun('bring_screwdriver_workspace')">
+                            🔍 Dry Run / Echo Command
+                        </button>
+                    </div>
+                </div>
+                <div id="skill-confirmation" class="confirmation-panel hidden">
+                    <div id="skill-confirm-text" class="confirm-text"></div>
+                    <div class="confirm-actions">
+                        <button id="skill-confirm-btn" class="btn btn-success" onclick="confirmSkillRun()">
+                            ✅ Confirm Run
+                        </button>
+                        <button class="btn btn-ghost" onclick="cancelConfirmation()">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- System Checks Card -->
+        <section class="card" id="system-card">
+            <div class="card-header">
+                <span class="card-icon">🔧</span>
+                <h2 class="card-title">System Checks</h2>
+            </div>
+            <div class="card-body">
+                <p class="card-desc">Diagnostics and hardware verification.</p>
+                <div class="check-buttons">
+                    <button id="test-cameras-btn" class="btn btn-outline" onclick="testCameras()">
+                        📷 Test Cameras
+                    </button>
+                    <button id="check-dataset-btn" class="btn btn-outline" onclick="checkDataset()">
+                        💾 Check Dataset
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Live Logs Card -->
+        <section class="card card-logs" id="logs-card">
+            <div class="card-header">
+                <span class="card-icon">📋</span>
+                <h2 class="card-title">Live Logs</h2>
+                <button class="btn btn-ghost btn-small" onclick="clearLogs()" title="Clear logs">
+                    🗑️ Clear
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="log-panel" class="log-panel">
+                    <div id="log-content" class="log-content">
+                        <div class="log-line log-info">
+                            <span class="log-time">--:--:--</span>
+                            <span class="log-text">Agent ready. Waiting for commands...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Card -->
+        <section class="card card-compact" id="settings-card">
+            <div class="card-header">
+                <span class="card-icon">⚙️</span>
+                <h2 class="card-title">Settings</h2>
+            </div>
+            <div class="card-body">
+                <label class="toggle-row" for="safe-mode-toggle">
+                    <span class="toggle-label">
+                        🛡️ Safe Mode
+                        <span class="toggle-desc">Require confirmation before running skills</span>
+                    </span>
+                    <input type="checkbox" id="safe-mode-toggle" class="toggle-input" checked onchange="toggleSafeMode(this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <footer class="footer">
+        <p>Physical AI Workspace Agent · Hackathon Demo · LeRobot SO-101</p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

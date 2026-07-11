@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="dark">
+    <title>Mira — Voice Physical Agent</title>
+    <meta name="description" content="Say intent. Mira chooses the robot skill. Voice-first physical workspace assistant controlling LeRobot SO-101.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Emergency Stop Banner -->
+    <div class="safety-banner">
+        <div class="safety-content">
+            <span class="safety-warning">⚠️ Keep hands clear while robot is moving.</span>
+            <button id="emergency-stop-btn" class="emergency-stop-btn" onclick="emergencyStop()">
+                <span class="stop-icon">🛑</span> STOP ROBOT
+            </button>
+        </div>
+    </div>
+
+    <!-- Main App Layout -->
+    <div class="app-wrapper">
+        <!-- Ambient Light Accents (Cinematic Dark Mode) -->
+        <div class="ambient-glow ambient-indigo"></div>
+        <div class="ambient-glow ambient-cyan"></div>
+
+        <!-- Header -->
+        <header class="header">
+            <div class="header-badge">HACKATHON DEMO · LEROBOT SO-101</div>
+            <h1 class="title">Mira — Voice Physical Agent</h1>
+            <p class="subtitle">Say intent. Mira chooses the robot skill.</p>
+            <div class="status-bar">
+                <div id="status-pill" class="status-pill status-idle">
+                    <span id="status-dot" class="status-dot"></span>
+                    <span id="status-text">IDLE</span>
+                </div>
+                <span id="active-skill-label" class="skill-pill hidden"></span>
+            </div>
+        </header>
+
+        <main class="main">
+            <!-- Assistant Message Hub (AI-Native UX) -->
+            <section class="card assistant-card">
+                <div class="card-top-row">
+                    <div class="assistant-identity">
+                        <div class="assistant-avatar">🤖</div>
+                        <div>
+                            <div class="assistant-name">Mira Assistant</div>
+                            <div class="assistant-role">Physical AI Intent Engine</div>
+                        </div>
+                    </div>
+                    <label class="speech-toggle-label" title="Speak Mira responses aloud">
+                        <span>🎙️ Voice Output</span>
+                        <input type="checkbox" id="voice-tts-toggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div id="assistant-bubble" class="assistant-bubble">
+                    Ready. Say "Mira, I need to fix something" to prep the workspace.
+                </div>
+            </section>
+
+            <!-- Voice Control Hub -->
+            <section class="card voice-card">
+                <div class="card-header">
+                    <h2>🗣️ Voice & Intent Command</h2>
+                </div>
+                <div class="voice-center">
+                    <button id="mic-btn" class="mic-btn" onclick="toggleSpeechRecognition()" title="Push to talk">
+                        <span id="mic-icon" class="mic-icon">🎤</span>
+                        <span id="mic-label">Push to Talk</span>
+                    </button>
+                    <div id="listening-waves" class="listening-waves hidden">
+                        <span></span><span></span><span></span><span></span><span></span>
+                    </div>
+                    <div id="transcript-live" class="transcript-live"></div>
+                </div>
+
+                <div class="input-row">
+                    <input
+                        type="text"
+                        id="intent-input"
+                        class="text-input"
+                        placeholder="Type intent... e.g. 'I need to fix something'"
+                        autocomplete="off"
+                    >
+                    <button id="send-intent-btn" class="btn btn-primary" onclick="submitTextIntent()">
+                        <span>Send</span>
+                    </button>
+                </div>
+
+                <!-- Demo Script Section -->
+                <div class="demo-script-section">
+                    <span class="demo-label">Suggested Demo Phrase:</span>
+                    <button class="demo-phrase-btn" onclick="triggerDemoPhrase('Mira, I need to fix something')">
+                        "Mira, I need to fix something."
+                    </button>
+                    <button class="demo-phrase-btn" onclick="triggerDemoPhrase('Bring me the screwdriver')">
+                        "Bring me the screwdriver"
+                    </button>
+                </div>
+            </section>
+
+            <!-- Big Touch-Friendly Action Deck -->
+            <section class="card deck-card">
+                <div class="card-header">
+                    <h2>🎯 Physical Robot Control Deck</h2>
+                </div>
+                <div class="button-grid">
+                    <button id="btn-prep-workspace" class="btn btn-gradient btn-huge" onclick="triggerSkill('screwdriver')">
+                        <span class="btn-icon">⚡</span>
+                        <div class="btn-text">
+                            <strong>Prep repair workspace</strong>
+                            <small>Starts LeRobot SO-101 policy</small>
+                        </div>
+                    </button>
+
+                    <button id="btn-bring-screwdriver" class="btn btn-accent btn-huge" onclick="triggerSkill('screwdriver')">
+                        <span class="btn-icon">🔧</span>
+                        <div class="btn-text">
+                            <strong>Bring screwdriver</strong>
+                            <small>Pick &amp; place on black pad</small>
+                        </div>
+                    </button>
+
+                    <button id="btn-check-status" class="btn btn-secondary btn-huge" onclick="fetchStatusManual()">
+                        <span class="btn-icon">📡</span>
+                        <div class="btn-text">
+                            <strong>Check status</strong>
+                            <small>Poll hardware state</small>
+                        </div>
+                    </button>
+
+                    <button id="btn-stop-deck" class="btn btn-danger btn-huge" onclick="emergencyStop()">
+                        <span class="btn-icon">🛑</span>
+                        <div class="btn-text">
+                            <strong>Stop robot</strong>
+                            <small>Terminate subprocess</small>
+                        </div>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Collapsible Live Logs Panel -->
+            <section class="card logs-card">
+                <div class="card-header clickable" onclick="toggleLogsPanel()">
+                    <h2>📋 Live Subprocess Logs</h2>
+                    <div class="logs-actions">
+                        <span id="log-count-badge" class="log-badge">0 lines</span>
+                        <button class="btn-mini" onclick="clearLogs(event)" title="Clear logs">🗑️</button>
+                        <span id="logs-chevron" class="chevron">▼</span>
+                    </div>
+                </div>
+                <div id="logs-container" class="logs-container">
+                    <div id="log-content" class="log-content">
+                        <div class="log-line log-info">
+                            <span class="log-time">--:--:--</span>
+                            <span class="log-text">Backend ready. Waiting for policy launch...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Agora ConvoAI Integration Scaffold -->
+            <section class="card agora-card">
+                <div class="card-header">
+                    <h2>🌐 Agora ConvoAI Tool Integration</h2>
+                </div>
+                <p class="agora-desc">
+                    Expose this local backend via ngrok to let an Agora Conversational AI agent trigger physical skills.
+                </p>
+                <div class="agora-endpoint-box">
+                    <code>POST /api/agora/tool/run_screwdriver_skill</code>
+                    <button class="btn-mini" onclick="copyAgoraEndpoint()" title="Copy Endpoint">📋 Copy</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Mira: Voice-First Physical Workspace Assistant · Hackathon Demo · LeRobot SO-101</p>
+        </footer>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
