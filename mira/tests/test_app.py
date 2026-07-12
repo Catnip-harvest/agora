@@ -250,6 +250,12 @@ def test_browser_joins_agora_with_channel_before_token():
     assert "client.join(session.app_id, session.channel, session.token, session.uid)" in source
 
 
+def test_scan_results_are_spoken_by_agora_and_web_fallback():
+    source = (mira.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "speechSynthesis.speak(utterance)" in source
+    assert "After it returns, always speak its message" in mira.AGORA_SYSTEM_PROMPT
+
+
 def test_extract_scan_target_examples():
     expected = {
         "Find the microphone": "microphone",

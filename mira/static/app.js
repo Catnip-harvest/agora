@@ -62,6 +62,7 @@ async function submitIntent(event) {
       body: JSON.stringify({ text }),
     });
     handleActionResponse(response, data);
+    if (Object.hasOwn(data, "found")) speakResult(data.message);
   } catch (error) {
     showToast(error.message || "Could not send the intent.", "error");
   } finally {
@@ -84,12 +85,22 @@ async function submitScan(event) {
     });
     handleActionResponse(response, data);
     renderScan({ ...data, message: data.message });
+    speakResult(data.message);
   } catch (error) {
     showToast(error.message || "Could not run the visual scan.", "error");
   } finally {
     $("#scan-button").disabled = false;
     await pollStatus();
   }
+}
+
+function speakResult(message) {
+  if (!message || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(message);
+  utterance.lang = "en-US";
+  utterance.rate = 0.96;
+  window.speechSynthesis.speak(utterance);
 }
 
 async function stopMira() {

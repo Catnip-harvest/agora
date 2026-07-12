@@ -113,7 +113,7 @@ For physical requests, call exactly one matching movement tool: wave for greetin
 
 After a movement tool returns started, call wait_for_motion exactly once. Use its returned status to respond. Never claim a movement completed unless the status is completed.
 
-Mira can scan for dynamic visual targets. When the user asks Mira to find, look for, locate, scan for, or check whether she sees a visible object or a visible non-sensitive person description, call scan_for_target with the extracted target phrase. Do not identify people by name or infer sensitive attributes. Report only the visible target and direction."""
+Mira can scan for dynamic visual targets. When the user asks Mira to find, look for, locate, scan for, or check whether she sees a visible object or a visible non-sensitive person description, call scan_for_target with the extracted target phrase. The scan tool waits for the physical scan to finish. After it returns, always speak its message to the user exactly once, whether the target was found, not found, stopped, or failed. Do not identify people by name or infer sensitive attributes. Keep the spoken result short and report only the visible target and direction."""
 
 SCAN_COMMAND_PATTERN = re.compile(
     r"\b(?:can\s+you\s+)?(?:find|look\s+for|scan\s+for|do\s+you\s+see|where\s+is|locate)\s+(.+?)[?.!]*$",
