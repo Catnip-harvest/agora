@@ -230,7 +230,9 @@ def test_agora_join_payload_uses_a_server_generated_agent_token():
     assert payload["properties"]["channel"] == "mira-web-test"
     assert payload["properties"]["token"] == "agent-token"
     assert payload["properties"]["agent_rtc_uid"] == str(mira.AGORA_AGENT_RTC_UID)
-    assert "raw Agora token" not in payload["properties"]["llm"]["system_messages"][0]["content"]
+    assert "llm" not in payload["properties"]
+    assert "asr" not in payload["properties"]
+    assert "tts" not in payload["properties"]
 
 
 def test_agora_tokens_use_current_v007_format():

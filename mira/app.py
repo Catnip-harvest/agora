@@ -223,27 +223,11 @@ def agora_is_configured() -> bool:
 
 
 def build_agora_join_payload(channel: str, agent_token: str) -> dict[str, Any]:
-    """Build the server-side counterpart to Agora's generated join curl."""
+    """Join the published Agent Studio pipeline without overriding its tools."""
     return {
         "name": f"mira-web-{int(time.time())}",
         "pipeline_id": AGORA_PIPELINE_ID,
         "properties": {
-            "asr": {"vendor": "deepgram", "params": {"model": "nova-3", "keyterm": "", "language": "en"}},
-            "llm": {
-                "vendor": "openai",
-                "params": {"model": "gpt-4.1-mini"},
-                "system_messages": [{"role": "system", "content": AGORA_SYSTEM_PROMPT}],
-                "greeting_message": "Hi, I'm Mira. Ask me to wave, dance, play dead, nod yes, or shake no.",
-                "failure_message": "I couldn't start that movement.",
-            },
-            "tts": {
-                "vendor": "minimax",
-                "params": {"model": "speech-2.8-turbo", "voice_setting": {"voice_id": "English_radiant_girl"}},
-            },
-            "parameters": {"silence_config": {"timeout_ms": 10000, "action": "think", "content": "Politely ask if the user is still online."}},
-            "idle_timeout": 120,
-            "turn_detection": {"interrupt_mode": "interrupt", "prefix_padding_ms": 800, "silence_duration_ms": 480, "threshold": 0.6},
-            "advanced_features": {"enable_rtm": True, "enable_sal": False, "enable_aivad": False},
             "channel": channel,
             "agent_rtc_uid": str(AGORA_AGENT_RTC_UID),
             "remote_rtc_uids": ["*"],
