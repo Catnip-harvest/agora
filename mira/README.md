@@ -1,80 +1,164 @@
-# Mira — Voice-First Physical Workspace Assistant
+# Mira — Voice Physical Agent
 
-**Mira** is a feature-rich, voice-first hackathon demo app that maps natural language user intent to a learned physical robot policy controlling a **LeRobot SO-101 follower arm** (`my_follower` on `/dev/ttyACM1`).
+Mira turns short voice or text intents into expressive motions on a LeRobot SO-101 follower arm. The gesture system is deliberately independent from the future screwdriver policy: gestures replay existing local datasets, use no cameras, and perform no training.
 
-Say intent: *"Mira, I need to fix something"* — Mira chooses the physical screwdriver skill (`pick up the screwdriver and put it on the black workspace`) and executes it via `lerobot-record`.
+> **Safety:** Keep hands clear while Mira is moving. Keep the red STOP control visible and test it before a demo.
 
----
+## Hardware and runtime
 
-## Architecture & Features
+- Ubuntu/Linux with a `lerobot` conda environment
+- LeRobot checkout at `~/lerobot`
+- SO-101 follower on `/dev/ttyACM1`, robot ID `my_follower`
+- One Uvicorn worker; process ownership and run history are stored in memory
+- Gesture datasets already present under `~/.cache/huggingface/lerobot/local/`
 
-- **Voice & Intent Recognition**: Use push-to-talk browser speech recognition (Web Speech API) or type natural language queries.
-- **Agentic Conversational Feedback**: Mira speaks back ("I’ll prep the repair workspace and bring the screwdriver over.") before launching physical movement.
-- **UI/UX Pro Max Dark Cinematic Design**: Mobile-first touch deck designed for hackathon demonstrations on phones or tablets over local Wi-Fi.
-- **Safety First**: Obvious red Emergency Stop button (`POST /api/robot/stop`) with process group cascade termination (`SIGINT` → `SIGTERM` → `SIGKILL`) and visible safety warnings.
-- **Agora ConvoAI Tool Scaffold**: Dedicated endpoint (`POST /api/agora/tool/run_screwdriver_skill`) ready for ngrok tunneling to Agora Conversational AI voice agents.
+| Skill | Dataset | Episode |
+| --- | --- | ---: |
+| Wave hello | `local/motion_hi_wave` | 0 |
+| Dance | `local/motion_dance` | 0 |
+| Play dead | `local/motion_play_dead` | 0 |
+| Nod yes | `local/motion_nod_yes` | 0 |
+| Shake no | `local/motion_shake_no` | 0 |
 
----
+Each gesture runs in the background as a camera-free `lerobot-replay` process. Only one robot process may run at a time. Mira captures combined stdout/stderr, monitors the exit code, and records the latest 50 runs. STOP targets the whole process group and escalates from `SIGINT` to `SIGTERM` and then `SIGKILL` if needed.
 
-## 1. Installation & Running Locally
+## Install and run
 
-Install backend dependencies:
 ```bash
-pip install -r requirements.txt
-```
-
-Launch the local server:
-```bash
+cd /home/viz/Downloads/agora/mira
+python -m pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
----
+Open `http://localhost:8000`. For a phone on the same Wi-Fi network, find the host address with `hostname -I` and open `http://YOUR_LOCAL_IP:8000`.
 
-## 2. Accessing on Laptop & Mobile Phone
+Do not use `--workers` with Uvicorn. Each worker would own separate robot state and could allow conflicting commands.
 
-1. **Open on Laptop**:
-   Visit [http://localhost:8000](http://localhost:8000) in Chrome/Edge/Firefox.
-2. **Find your Local LAN IP**:
-   ```bash
-   hostname -I
-   ```
-3. **Open on Phone**:
-   Connect your phone to the same Wi-Fi network and browse to:
-   ```text
-   http://YOUR_LOCAL_IP:8000
-   ```
+## API
 
----
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/` | Mobile control room |
+| `GET` | `/api/status` | Current state, logs, history, and policy availability |
+| `POST` | `/api/skill/wave` | Replay wave |
+| `POST` | `/api/skill/dance` | Replay dance |
+| `POST` | `/api/skill/play_dead` | Replay play-dead motion |
+| `POST` | `/api/skill/nod_yes` | Replay yes nod |
+| `POST` | `/api/skill/shake_no` | Replay no shake |
+| `POST` | `/api/skill/scan_motion` | Replay the recorded 15-second scan motion |
+| `POST` | `/api/robot/stop` | Stop the active process group |
+| `POST` | `/api/voice/intent` | Map `{ "text": "..." }` to a gesture |
+| `POST` | `/api/scan` | Scan for a dynamic visible target using `{ "target": "red bottle" }` |
+| `POST` | `/api/agora/tool/scan_for_target` | Agora wrapper for the same visual scan logic |
+| `POST` | `/api/skill/screwdriver` | Disabled future-policy endpoint |
+| `POST` | `/api/agora/tool/wait_for_motion` | Wait 8 seconds, then report the current motion status to Agora |
 
-## 3. Exposing Publicly with ngrok & Connecting Agora ConvoAI
+Start a gesture:
 
-1. **Start ngrok tunnel**:
-   ```bash
-   ngrok http 8000
-   ```
-2. **Copy the Public Forwarding URL** (e.g. `https://abc123.ngrok-free.app`).
-3. **Configure Agora Conversational AI Tool**:
-   In your Agora Agent Tool configuration, set the tool execution URL to:
-   ```text
-   https://abc123.ngrok-free.app/api/agora/tool/run_screwdriver_skill
-   ```
-   When your Agora agent decides to run the screwdriver skill, it will POST to this endpoint and receive:
-   ```json
-   {
-     "success": true,
-     "message": "I’m moving the screwdriver to the workspace now.",
-     "skill": "screwdriver"
-   }
-   ```
+```bash
+curl -X POST http://localhost:8000/api/skill/wave
+```
 
----
+```json
+{
+  "success": true,
+  "message": "Mira is waving hello.",
+  "skill": "wave",
+  "status": "started"
+}
+```
 
-## API Reference
+Direct skill endpoints return HTTP `409` if Mira is busy. Agora endpoints always return HTTP `200`; a busy tool response is:
 
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `POST` | `/api/skill/screwdriver` | Starts trained LeRobot policy subprocess (`outputs/train/smolvla_screwdriver_20k/checkpoints/last/pretrained_model`) |
-| `POST` | `/api/robot/stop` | Safely terminates active robot subprocess |
-| `GET` | `/api/status` | Returns hardware status, active skill, timestamps, and live logs |
-| `POST` | `/api/voice/intent` | Maps NL text (e.g. `"I need to fix something"`) to physical skill |
-| `POST` | `/api/agora/tool/run_screwdriver_skill` | Agora ConvoAI JSON tool endpoint |
+```json
+{
+  "success": false,
+  "message": "Mira is already moving. Please wait.",
+  "skill": "dance",
+  "status": "busy"
+}
+```
+
+Voice intent mappings include:
+
+- `say hi`, `wave`, `hello`, `greet me` → wave
+- `dance`, `celebrate`, `show me a move` → dance
+- `play dead`, `act dead`, `sleep` → play dead
+- `yes`, `correct`, `can you do that`, `is that possible` → nod yes
+- `no`, `not possible`, `unsupported`, `can't do that` → shake no
+
+An unsupported request receives a friendly response and triggers `shake_no` when Mira is idle. It never interrupts an active motion.
+
+## Dynamic vision scan
+
+Mira recognizes commands such as “find the microphone,” “look for the screwdriver,” “do you see a person wearing a hat?”, and “scan for a red bottle.” The same target extraction is available through the text-intent API and Agora's `scan_for_target` custom tool.
+
+Mira replays `local/motion_scan_10s` episode `0` and captures one camera frame at each of the recording's four pauses (approximately 3.0, 5.5, 8.8, and 10.5 seconds). Captures are corrected 90° counterclockwise, written to `static/scans/`, and checked with `gemini-3.1-flash-lite`. A confident match ends the replay early; otherwise all four positions are checked and the recording returns the base to center.
+
+Keep the API key server-side in `.env` and never put it in browser JavaScript:
+
+```dotenv
+SCAN_CAMERA_PATH=/dev/v4l/by-id/usb-DSJ-250318-J_DSJ-2062-309-video-index0
+SCAN_CAMERA_ROTATION=90_ccw
+GEMINI_API_KEY=replace-with-a-restricted-key
+GEMINI_MODEL=gemini-3.1-flash-lite
+```
+
+Only one robot run may be active. STOP interrupts the scan replay, and identity or sensitive-trait targets are refused before camera or robot access.
+
+## Agora Conversational AI
+
+Expose the local service:
+
+```bash
+ngrok http 8000
+```
+
+Replace `YOUR_NGROK_URL` with the HTTPS forwarding host and configure these tool URLs:
+
+```text
+https://YOUR_NGROK_URL/api/agora/tool/run_wave_skill
+https://YOUR_NGROK_URL/api/agora/tool/run_dance_skill
+https://YOUR_NGROK_URL/api/agora/tool/run_play_dead_skill
+https://YOUR_NGROK_URL/api/agora/tool/run_nod_yes_skill
+https://YOUR_NGROK_URL/api/agora/tool/run_shake_no_skill
+```
+
+All tools use `POST` and accept an empty request body.
+
+Suggested agent prompt:
+
+> You are Mira, a concise voice-controlled physical robot assistant. You can express yourself physically with wave, dance, play dead, nod yes, and shake no. When the user asks you to greet, wave, dance, play dead, nod, or shake no, call the corresponding tool. Keep spoken responses short. Do not claim success before the tool starts. If the robot is busy, say you are already moving.
+
+## Future screwdriver policy
+
+The screwdriver card remains a placeholder and its command is documented in `app.py`. The endpoint does not launch anything unless the server starts with `POLICY_READY=true`:
+
+```bash
+POLICY_READY=true uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+The learned policy is separate from gesture replay and retains its own cameras and evaluation dataset.
+
+## Web voice panel
+
+The control room includes a **Talk to Mira** panel. It starts an Agora RTC session server-side, then joins the browser microphone to that temporary channel. The browser only receives a short-lived client token; the App Certificate remains in `.env`.
+
+Set the following local values in `mira/.env` before using it:
+
+```dotenv
+AGORA_APP_ID=your_app_id
+AGORA_APP_CERTIFICATE=your_rotated_app_certificate
+AGORA_PIPELINE_ID=your_agora_pipeline_id
+AGORA_AGENT_RTC_UID=214069
+```
+
+Restart Uvicorn after changing `.env`. The generated console curl token is not needed and must never be added to the frontend.
+
+## Tests
+
+The regression suite mocks `subprocess.Popen`; it never sends a command to the robot:
+
+```bash
+conda run -n lerobot python -m pytest -q
+```

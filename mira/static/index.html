@@ -1,194 +1,174 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="color-scheme" content="dark">
-    <title>Mira — Voice Physical Agent</title>
-    <meta name="description" content="Say intent. Mira chooses the robot skill. Voice-first physical workspace assistant controlling LeRobot SO-101.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b14">
+  <meta name="color-scheme" content="dark">
+  <title>Mira — Voice Physical Agent</title>
+  <meta name="description" content="Intent in, motion out. Control Mira's physical gestures with voice or touch.">
+  <link rel="stylesheet" href="/static/style.css?v=3">
 </head>
 <body>
-    <!-- Emergency Stop Banner -->
-    <div class="safety-banner">
-        <div class="safety-content">
-            <span class="safety-warning">⚠️ Keep hands clear while robot is moving.</span>
-            <button id="emergency-stop-btn" class="emergency-stop-btn" onclick="emergencyStop()">
-                <span class="stop-icon">🛑</span> STOP ROBOT
-            </button>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <header class="safety-bar">
+    <div class="safety-copy"><span class="warning-dot"></span>Keep hands clear while Mira is moving.</div>
+    <button class="stop-button stop-compact" data-stop type="button" aria-label="Stop Mira immediately">
+      <span>■</span> STOP
+    </button>
+  </header>
+
+  <div class="shell">
+    <header class="hero">
+      <div class="eyebrow"><span class="live-dot"></span> SO-101 · PHYSICAL AI</div>
+      <h1>Mira <span>— Voice Physical Agent</span></h1>
+      <p>Intent in, motion out.</p>
+      <div class="status-row" aria-live="polite">
+        <div id="status-pill" class="status-pill status-idle">
+          <span class="status-light"></span>
+          <span id="status-text">Idle</span>
         </div>
-    </div>
+        <span id="active-skill" class="active-skill hidden"></span>
+      </div>
+    </header>
 
-    <!-- Main App Layout -->
-    <div class="app-wrapper">
-        <!-- Ambient Light Accents (Cinematic Dark Mode) -->
-        <div class="ambient-glow ambient-indigo"></div>
-        <div class="ambient-glow ambient-cyan"></div>
+    <main>
+      <section class="panel command-panel">
+        <div class="panel-heading">
+          <div>
+            <span class="section-kicker">VOICE LINK</span>
+            <h2>Tell Mira what to do</h2>
+          </div>
+          <div class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        </div>
 
-        <!-- Header -->
-        <header class="header">
-            <div class="header-badge">HACKATHON DEMO · LEROBOT SO-101</div>
-            <h1 class="title">Mira — Voice Physical Agent</h1>
-            <p class="subtitle">Say intent. Mira chooses the robot skill.</p>
-            <div class="status-bar">
-                <div id="status-pill" class="status-pill status-idle">
-                    <span id="status-dot" class="status-dot"></span>
-                    <span id="status-text">IDLE</span>
-                </div>
-                <span id="active-skill-label" class="skill-pill hidden"></span>
-            </div>
-        </header>
+        <div id="assistant-message" class="assistant-message" aria-live="polite">
+          <span class="mira-mark">M</span>
+          <p>Ready. Ask Mira to wave, dance, play dead, nod yes, or shake no.</p>
+        </div>
 
-        <main class="main">
-            <!-- Assistant Message Hub (AI-Native UX) -->
-            <section class="card assistant-card">
-                <div class="card-top-row">
-                    <div class="assistant-identity">
-                        <div class="assistant-avatar">🤖</div>
-                        <div>
-                            <div class="assistant-name">Mira Assistant</div>
-                            <div class="assistant-role">Physical AI Intent Engine</div>
-                        </div>
-                    </div>
-                    <label class="speech-toggle-label" title="Speak Mira responses aloud">
-                        <span>🎙️ Voice Output</span>
-                        <input type="checkbox" id="voice-tts-toggle" checked>
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
+        <form id="intent-form" class="intent-form">
+          <label class="sr-only" for="intent-input">Your intent</label>
+          <input id="intent-input" type="text" maxlength="500" placeholder="Try “Mira, say hi”" autocomplete="off" required>
+          <button id="mic-button" class="icon-button hidden" type="button" aria-label="Speak intent" title="Speak intent">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.25a3.75 3.75 0 0 0 3.75-3.75V6a3.75 3.75 0 1 0-7.5 0v5.5A3.75 3.75 0 0 0 12 15.25Z"/><path d="M5.75 10.75v.75a6.25 6.25 0 0 0 12.5 0v-.75M12 17.75V22M8.5 22h7"/></svg>
+          </button>
+          <button id="send-button" class="send-button" type="submit">Send intent <span>↗</span></button>
+        </form>
+        <div id="speech-status" class="speech-status hidden">Listening…</div>
+      </section>
 
-                <div id="assistant-bubble" class="assistant-bubble">
-                    Ready. Say "Mira, I need to fix something" to prep the workspace.
-                </div>
-            </section>
+      <section class="panel agora-voice-panel">
+        <div class="panel-heading">
+          <div>
+            <span class="section-kicker">AGORA VOICE LINK</span>
+            <h2>Talk to Mira</h2>
+          </div>
+          <span id="agora-voice-state" class="voice-state">Offline</span>
+        </div>
+        <p>Connect your microphone to the Agora agent. Its tool calls control Mira and the live telemetry below shows the physical result.</p>
+        <div class="voice-actions">
+          <button id="agora-connect-button" class="send-button" type="button">Connect voice <span>◉</span></button>
+          <button id="agora-disconnect-button" class="voice-disconnect" type="button" disabled>Disconnect</button>
+        </div>
+        <p id="agora-voice-message" class="voice-message">Start the local server, then connect when you are ready to speak.</p>
+      </section>
 
-            <!-- Voice Control Hub -->
-            <section class="card voice-card">
-                <div class="card-header">
-                    <h2>🗣️ Voice & Intent Command</h2>
-                </div>
-                <div class="voice-center">
-                    <button id="mic-btn" class="mic-btn" onclick="toggleSpeechRecognition()" title="Push to talk">
-                        <span id="mic-icon" class="mic-icon">🎤</span>
-                        <span id="mic-label">Push to Talk</span>
-                    </button>
-                    <div id="listening-waves" class="listening-waves hidden">
-                        <span></span><span></span><span></span><span></span><span></span>
-                    </div>
-                    <div id="transcript-live" class="transcript-live"></div>
-                </div>
+      <section class="panel vision-panel">
+        <div class="panel-heading">
+          <div><span class="section-kicker">DYNAMIC VISION</span><h2>Vision Scan</h2></div>
+          <span id="scan-result-badge" class="voice-state">Ready</span>
+        </div>
+        <form id="scan-form" class="scan-form">
+          <label class="sr-only" for="scan-target-input">Visible target description</label>
+          <input id="scan-target-input" maxlength="160" placeholder="What should Mira look for?" autocomplete="off" required>
+          <button id="scan-button" class="send-button" type="submit">Scan <span>◎</span></button>
+        </form>
+        <div class="scan-chips" aria-label="Example scan targets">
+          <button type="button" data-scan-example="microphone">microphone</button>
+          <button type="button" data-scan-example="screwdriver">screwdriver</button>
+          <button type="button" data-scan-example="person wearing a hat">person wearing a hat</button>
+          <button type="button" data-scan-example="red bottle">red bottle</button>
+          <button type="button" data-scan-example="black notebook">black notebook</button>
+        </div>
+        <div class="scan-display">
+          <div class="scan-image-wrap">
+            <img id="scan-image" class="hidden" alt="Latest image captured during Mira's visual scan">
+            <div id="scan-image-empty" class="scan-image-empty"><span>◉</span> Last captured frame</div>
+          </div>
+          <dl class="scan-readout">
+            <div><dt>Target</dt><dd id="scan-current-target">—</dd></div>
+            <div><dt>Angle</dt><dd id="scan-current-angle">—</dd></div>
+            <div><dt>Result</dt><dd id="scan-current-result">Not scanned</dd></div>
+            <div class="scan-message-row"><dt>Message</dt><dd id="scan-current-message">Enter a visible target to begin.</dd></div>
+          </dl>
+        </div>
+        <p class="privacy-note">Mira searches only for objects and visible non-sensitive descriptions. Identity and sensitive-trait searches are refused.</p>
+      </section>
 
-                <div class="input-row">
-                    <input
-                        type="text"
-                        id="intent-input"
-                        class="text-input"
-                        placeholder="Type intent... e.g. 'I need to fix something'"
-                        autocomplete="off"
-                    >
-                    <button id="send-intent-btn" class="btn btn-primary" onclick="submitTextIntent()">
-                        <span>Send</span>
-                    </button>
-                </div>
+      <section class="controls-section">
+        <div class="section-heading">
+          <div><span class="section-kicker">EMOTE DECK</span><h2>Physical expressions</h2></div>
+          <span class="shortcut">One motion at a time</span>
+        </div>
 
-                <!-- Demo Script Section -->
-                <div class="demo-script-section">
-                    <span class="demo-label">Suggested Demo Phrase:</span>
-                    <button class="demo-phrase-btn" onclick="triggerDemoPhrase('Mira, I need to fix something')">
-                        "Mira, I need to fix something."
-                    </button>
-                    <button class="demo-phrase-btn" onclick="triggerDemoPhrase('Bring me the screwdriver')">
-                        "Bring me the screwdriver"
-                    </button>
-                </div>
-            </section>
+        <div class="skill-grid">
+          <button class="skill-card skill-wave" data-skill="wave" type="button">
+            <span class="skill-index">01</span><span class="skill-icon">👋</span>
+            <span class="skill-copy"><strong>Wave hello</strong><small>A friendly greeting</small></span><span class="arrow">↗</span>
+          </button>
+          <button class="skill-card skill-dance" data-skill="dance" type="button">
+            <span class="skill-index">02</span><span class="skill-icon">✦</span>
+            <span class="skill-copy"><strong>Dance</strong><small>Show off a move</small></span><span class="arrow">↗</span>
+          </button>
+          <button class="skill-card skill-dead" data-skill="play_dead" type="button">
+            <span class="skill-index">03</span><span class="skill-icon">☠</span>
+            <span class="skill-copy"><strong>Play dead</strong><small>Power-down pose</small></span><span class="arrow">↗</span>
+          </button>
+          <button class="skill-card skill-yes" data-skill="nod_yes" type="button">
+            <span class="skill-index">04</span><span class="skill-icon">✓</span>
+            <span class="skill-copy"><strong>Nod yes</strong><small>Physical confirmation</small></span><span class="arrow">↗</span>
+          </button>
+          <button class="skill-card skill-no" data-skill="shake_no" type="button">
+            <span class="skill-index">05</span><span class="skill-icon">×</span>
+            <span class="skill-copy"><strong>Shake no</strong><small>Physical refusal</small></span><span class="arrow">↗</span>
+          </button>
+          <article id="screwdriver-card" class="skill-card coming-soon" aria-disabled="true">
+            <span class="skill-index">SOON</span><span class="skill-icon">⌁</span>
+            <span class="skill-copy"><strong>Screwdriver</strong><small id="screwdriver-copy">Learned policy coming soon</small></span><span class="lock">⌁</span>
+          </article>
+        </div>
 
-            <!-- Big Touch-Friendly Action Deck -->
-            <section class="card deck-card">
-                <div class="card-header">
-                    <h2>🎯 Physical Robot Control Deck</h2>
-                </div>
-                <div class="button-grid">
-                    <button id="btn-prep-workspace" class="btn btn-gradient btn-huge" onclick="triggerSkill('screwdriver')">
-                        <span class="btn-icon">⚡</span>
-                        <div class="btn-text">
-                            <strong>Prep repair workspace</strong>
-                            <small>Starts LeRobot SO-101 policy</small>
-                        </div>
-                    </button>
+        <button class="stop-button stop-main" data-stop type="button">
+          <span class="stop-square">■</span><span><strong>STOP MIRA</strong><small>Terminate the active motion</small></span>
+        </button>
+      </section>
 
-                    <button id="btn-bring-screwdriver" class="btn btn-accent btn-huge" onclick="triggerSkill('screwdriver')">
-                        <span class="btn-icon">🔧</span>
-                        <div class="btn-text">
-                            <strong>Bring screwdriver</strong>
-                            <small>Pick &amp; place on black pad</small>
-                        </div>
-                    </button>
+      <div class="telemetry-grid">
+        <section class="panel telemetry-panel">
+          <button id="logs-toggle" class="panel-toggle" type="button" aria-expanded="true" aria-controls="logs-body">
+            <span><span class="section-kicker">TELEMETRY</span><strong>Recent logs</strong></span>
+            <span><b id="log-count">0</b><i class="chevron">⌄</i></span>
+          </button>
+          <div id="logs-body" class="collapsible">
+            <div id="log-list" class="log-list"><p class="empty-state">Waiting for a robot command…</p></div>
+          </div>
+        </section>
 
-                    <button id="btn-check-status" class="btn btn-secondary btn-huge" onclick="fetchStatusManual()">
-                        <span class="btn-icon">📡</span>
-                        <div class="btn-text">
-                            <strong>Check status</strong>
-                            <small>Poll hardware state</small>
-                        </div>
-                    </button>
+        <section class="panel history-panel">
+          <div class="panel-title"><span><span class="section-kicker">MEMORY</span><strong>Run history</strong></span><span id="history-count">0 runs</span></div>
+          <div id="history-list" class="history-list"><p class="empty-state">Completed motions will appear here.</p></div>
+        </section>
+      </div>
+    </main>
 
-                    <button id="btn-stop-deck" class="btn btn-danger btn-huge" onclick="emergencyStop()">
-                        <span class="btn-icon">🛑</span>
-                        <div class="btn-text">
-                            <strong>Stop robot</strong>
-                            <small>Terminate subprocess</small>
-                        </div>
-                    </button>
-                </div>
-            </section>
+    <footer><span>MIRA / VOICE PHYSICAL AGENT</span><span>LOCAL CONTROL · <b id="connection-state">CONNECTING</b></span></footer>
+  </div>
 
-            <!-- Collapsible Live Logs Panel -->
-            <section class="card logs-card">
-                <div class="card-header clickable" onclick="toggleLogsPanel()">
-                    <h2>📋 Live Subprocess Logs</h2>
-                    <div class="logs-actions">
-                        <span id="log-count-badge" class="log-badge">0 lines</span>
-                        <button class="btn-mini" onclick="clearLogs(event)" title="Clear logs">🗑️</button>
-                        <span id="logs-chevron" class="chevron">▼</span>
-                    </div>
-                </div>
-                <div id="logs-container" class="logs-container">
-                    <div id="log-content" class="log-content">
-                        <div class="log-line log-info">
-                            <span class="log-time">--:--:--</span>
-                            <span class="log-text">Backend ready. Waiting for policy launch...</span>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Agora ConvoAI Integration Scaffold -->
-            <section class="card agora-card">
-                <div class="card-header">
-                    <h2>🌐 Agora ConvoAI Tool Integration</h2>
-                </div>
-                <p class="agora-desc">
-                    Expose this local backend via ngrok to let an Agora Conversational AI agent trigger physical skills.
-                </p>
-                <div class="agora-endpoint-box">
-                    <code>POST /api/agora/tool/run_screwdriver_skill</code>
-                    <button class="btn-mini" onclick="copyAgoraEndpoint()" title="Copy Endpoint">📋 Copy</button>
-                </div>
-            </section>
-        </main>
-
-        <footer class="footer">
-            <p>Mira: Voice-First Physical Workspace Assistant · Hackathon Demo · LeRobot SO-101</p>
-        </footer>
-    </div>
-
-    <!-- Toast Container -->
-    <div id="toast-container" class="toast-container"></div>
-
-    <script src="/static/app.js"></script>
+  <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+  <script src="/static/app.js?v=3"></script>
+  <script type="module" src="/static/agora-voice.js?v=2"></script>
 </body>
 </html>

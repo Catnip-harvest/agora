@@ -1,314 +1,329 @@
-/* ═══════════════════════════════════════════════════════════════
-   Mira — Voice-First Physical Workspace Assistant
-   Frontend JavaScript Engine · Voice Recognition & TTS · 600ms Polling
-   ═══════════════════════════════════════════════════════════════ */
+"use strict";
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
+const POLL_INTERVAL_MS = 800;
 
 let recognition = null;
+let pollInFlight = false;
 let isListening = false;
-let pollingTimer = null;
-let lastLogCount = 0;
+let lastStatus = null;
+let lastHistoryFingerprint = "";
+let lastLogFingerprint = "";
 
-const $ = (id) => document.getElementById(id);
-
-// Initialize Speech Recognition & Polling on load
 document.addEventListener("DOMContentLoaded", () => {
-    initSpeechRecognition();
-    pollingTimer = setInterval(pollBackendStatus, 600);
-    pollBackendStatus();
-
-    // Enter key handler for input box
-    const intentInput = $("intent-input");
-    if (intentInput) {
-        intentInput.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") submitTextIntent();
-        });
-    }
+  $("#intent-form").addEventListener("submit", submitIntent);
+  $("#intent-form").addEventListener("click", (event) => {
+    if (!event.target.closest("button")) $("#intent-input").focus();
+  });
+  $("#scan-form").addEventListener("submit", submitScan);
+  $$("[data-skill]").forEach((button) => button.addEventListener("click", () => runSkill(button.dataset.skill)));
+  $$("[data-scan-example]").forEach((button) => button.addEventListener("click", () => {
+    $("#scan-target-input").value = button.dataset.scanExample;
+  }));
+  $$("[data-stop]").forEach((button) => button.addEventListener("click", stopMira));
+  $("#logs-toggle").addEventListener("click", toggleLogs);
+  initSpeechRecognition();
+  pollStatus();
+  window.setInterval(pollStatus, POLL_INTERVAL_MS);
 });
 
-/* ─── Web Speech API Recognition ───────────────────────────── */
-function initSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.warn("Speech recognition not supported in this browser.");
-        const micLabel = $("mic-label");
-        if (micLabel) micLabel.textContent = "Mic N/A";
-        return;
-    }
-
-    recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    recognition.onstart = () => {
-        isListening = true;
-        const micBtn = $("mic-btn");
-        const waves = $("listening-waves");
-        const label = $("mic-label");
-        if (micBtn) micBtn.classList.add("listening");
-        if (waves) waves.classList.remove("hidden");
-        if (label) label.textContent = "Listening...";
-        showToast("Listening... Speak your intent", "info");
-    };
-
-    recognition.onresult = (event) => {
-        let interimText = "";
-        let finalInputText = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalInputText += event.results[i][0].transcript;
-            } else {
-                interimText += event.results[i][0].transcript;
-            }
-        }
-        const transcriptEl = $("transcript-live");
-        if (transcriptEl) transcriptEl.textContent = finalInputText || interimText;
-
-        if (finalInputText.trim().length > 0) {
-            sendIntentToBackend(finalInputText.trim());
-        }
-    };
-
-    recognition.onerror = (event) => {
-        console.error("Speech error:", event.error);
-        stopSpeechRecognition();
-    };
-
-    recognition.onend = () => {
-        stopSpeechRecognition();
-    };
+async function apiRequest(path, options = {}) {
+  const response = await fetch(path, options);
+  let data;
+  try { data = await response.json(); }
+  catch { throw new Error(`Mira returned an invalid response (${response.status}).`); }
+  return { response, data };
 }
 
-function toggleSpeechRecognition() {
-    if (!recognition) {
-        showToast("Voice recognition is not supported in this browser. Try Chrome/Edge or type below.", "error");
-        return;
-    }
-    if (isListening) {
-        recognition.stop();
-    } else {
-        $("transcript-live").textContent = "";
-        try {
-            recognition.start();
-        } catch (err) {
-            console.error("Mic start err:", err);
-        }
-    }
+async function runSkill(skill) {
+  setControlsBusy(true);
+  try {
+    const { response, data } = await apiRequest(`/api/skill/${skill}`, { method: "POST" });
+    handleActionResponse(response, data);
+  } catch (error) {
+    showToast(error.message || "Could not reach Mira.", "error");
+  } finally {
+    await pollStatus();
+  }
 }
 
-function stopSpeechRecognition() {
-    isListening = false;
-    const micBtn = $("mic-btn");
-    const waves = $("listening-waves");
-    const label = $("mic-label");
-    if (micBtn) micBtn.classList.remove("listening");
-    if (waves) waves.classList.add("hidden");
-    if (label) label.textContent = "Push to Talk";
+async function submitIntent(event) {
+  event.preventDefault();
+  const input = $("#intent-input");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  $("#send-button").disabled = true;
+  try {
+    const { response, data } = await apiRequest("/api/voice/intent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    handleActionResponse(response, data);
+  } catch (error) {
+    showToast(error.message || "Could not send the intent.", "error");
+  } finally {
+    $("#send-button").disabled = false;
+    await pollStatus();
+  }
 }
 
-/* ─── Speech Synthesis (TTS Response) ──────────────────────── */
-function speakAssistantMessage(text) {
-    const ttsToggle = $("voice-tts-toggle");
-    if (!ttsToggle || !ttsToggle.checked) return;
-    if (!("speechSynthesis" in window)) return;
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.02;
-    window.speechSynthesis.speak(utterance);
+async function submitScan(event) {
+  event.preventDefault();
+  const input = $("#scan-target-input");
+  const target = input.value.trim();
+  if (!target) return;
+  $("#scan-button").disabled = true;
+  try {
+    const { response, data } = await apiRequest("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target }),
+    });
+    handleActionResponse(response, data);
+    renderScan({ ...data, message: data.message });
+  } catch (error) {
+    showToast(error.message || "Could not run the visual scan.", "error");
+  } finally {
+    $("#scan-button").disabled = false;
+    await pollStatus();
+  }
 }
 
-/* ─── Intent & Voice Submission ────────────────────────────── */
-async function submitTextIntent() {
-    const input = $("intent-input");
-    const text = input ? input.value.trim() : "";
-    if (!text) return;
-    input.value = "";
-    await sendIntentToBackend(text);
+async function stopMira() {
+  try {
+    const { data } = await apiRequest("/api/robot/stop", { method: "POST" });
+    updateAssistant(data.message);
+    showToast(data.message, data.success ? "success" : "info");
+  } catch (error) {
+    showToast(error.message || "STOP could not reach Mira.", "error");
+  } finally {
+    await pollStatus();
+  }
 }
 
-function triggerDemoPhrase(phrase) {
-    const input = $("intent-input");
-    if (input) input.value = phrase;
-    sendIntentToBackend(phrase);
+function handleActionResponse(response, data) {
+  updateAssistant(data.message || "Mira received the command.");
+  const type = data.success ? "success" : (response.ok && data.status !== "failed" ? "info" : "error");
+  showToast(data.message || "Command received.", type);
 }
 
-async function sendIntentToBackend(text) {
-    showToast(`Intent: "${text}"`, "info");
-    try {
-        const res = await fetch("/api/voice/intent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text })
-        });
-        const data = await res.json();
-        updateAssistantBubble(data.message);
-        speakAssistantMessage(data.message);
-        pollBackendStatus();
-    } catch (err) {
-        showToast("Error sending voice intent to server", "error");
-    }
+async function pollStatus() {
+  if (pollInFlight) return;
+  pollInFlight = true;
+  try {
+    const { response, data } = await apiRequest("/api/status");
+    if (!response.ok) throw new Error("Status unavailable.");
+    renderStatus(data);
+    const connection = $("#connection-state");
+    connection.textContent = "ONLINE";
+    connection.classList.add("online");
+  } catch {
+    const connection = $("#connection-state");
+    connection.textContent = "OFFLINE";
+    connection.classList.remove("online");
+  } finally {
+    pollInFlight = false;
+  }
 }
 
-/* ─── Direct Skill & Stop Triggers ─────────────────────────── */
-async function triggerSkill(skillName) {
-    try {
-        const res = await fetch("/api/skill/screwdriver", {
-            method: "POST"
-        });
-        const data = await res.json();
-        if (res.ok) {
-            showToast("Screwdriver policy started", "success");
-            updateAssistantBubble(data.message || "I’ll prep the repair workspace and bring the screwdriver over.");
-            speakAssistantMessage(data.message || "I’ll prep the repair workspace and bring the screwdriver over.");
-        } else {
-            showToast(data.error || "Could not start run", "error");
-        }
-        pollBackendStatus();
-    } catch (err) {
-        showToast("Error calling skill endpoint", "error");
-    }
+function renderStatus(data) {
+  const status = data.status || data.robot_status || "idle";
+  const pill = $("#status-pill");
+  pill.className = `status-pill status-${status}`;
+  $("#status-text").textContent = displayName(status);
+
+  const active = $("#active-skill");
+  if (data.active_skill) {
+    active.textContent = `Running · ${displayName(data.active_skill)}`;
+    active.classList.remove("hidden");
+  } else {
+    active.classList.add("hidden");
+  }
+
+  setControlsBusy(status === "running" || (status === "stopped" && Boolean(data.active_skill)));
+  updateAssistant(data.message);
+  renderLogs(data.latest_logs || []);
+  renderHistory(data.history || []);
+  renderScrewdriver(data.screwdriver_available);
+  renderScan(data.scan || {});
+
+  if (lastStatus && lastStatus === "running" && ["completed", "failed", "stopped"].includes(status)) {
+    showToast(data.message, status === "completed" ? "success" : (status === "failed" ? "error" : "info"));
+  }
+  lastStatus = status;
 }
 
-async function emergencyStop() {
-    try {
-        const res = await fetch("/api/robot/stop", {
-            method: "POST"
-        });
-        const data = await res.json();
-        showToast(data.message || "Robot stopped", "info");
-        pollBackendStatus();
-    } catch (err) {
-        showToast("Error calling stop endpoint", "error");
-    }
+function setControlsBusy(isBusy) {
+  $$("[data-skill]").forEach((button) => { button.disabled = isBusy; });
+  $("#scan-button").disabled = isBusy;
 }
 
-async function fetchStatusManual() {
-    showToast("Polling hardware status...", "info");
-    await pollBackendStatus();
+function updateAssistant(message) {
+  if (!message) return;
+  const paragraph = $("#assistant-message p");
+  if (paragraph.textContent !== message) paragraph.textContent = message;
 }
 
-/* ─── 600ms Status Polling ─────────────────────────────────── */
-async function pollBackendStatus() {
-    try {
-        const res = await fetch("/api/status");
-        if (!res.ok) return;
-        const data = await res.json();
-
-        // Update status pill
-        const pill = $("status-pill");
-        const statusText = $("status-text");
-        if (pill) {
-            pill.className = `status-pill status-${data.robot_status}`;
-        }
-        if (statusText) {
-            statusText.textContent = (data.robot_status || "IDLE").toUpperCase();
-        }
-
-        // Active skill pill
-        const skillLabel = $("active-skill-label");
-        if (skillLabel) {
-            if (data.active_skill) {
-                skillLabel.textContent = `Active: ${data.active_skill.toUpperCase()}`;
-                skillLabel.classList.remove("hidden");
-            } else {
-                skillLabel.classList.add("hidden");
-            }
-        }
-
-        // Assistant bubble
-        if (data.last_assistant_message) {
-            updateAssistantBubble(data.last_assistant_message);
-        }
-
-        // Update logs
-        if (data.latest_logs && data.latest_logs.length !== lastLogCount) {
-            renderLogs(data.latest_logs);
-            lastLogCount = data.latest_logs.length;
-        }
-    } catch (err) {
-        // Silent catch during periodic polling
-    }
-}
-
-function updateAssistantBubble(msg) {
-    const bubble = $("assistant-bubble");
-    if (bubble && bubble.textContent.trim() !== msg) {
-        bubble.textContent = msg;
-    }
-}
-
-/* ─── Log Panel Handling ───────────────────────────────────── */
 function renderLogs(logs) {
-    const logContent = $("log-content");
-    const logBadge = $("log-count-badge");
-    if (!logContent) return;
-
-    if (logBadge) logBadge.textContent = `${logs.length} lines`;
-
-    logContent.innerHTML = logs.map(l => {
-        let typeClass = "log-info";
-        if (l.text.includes("✅")) typeClass = "log-success";
-        else if (l.text.includes("❌") || l.text.includes("⛔")) typeClass = "log-error";
-        else if (l.text.includes("🚀") || l.text.includes("📋")) typeClass = "log-command";
-
-        return `
-            <div class="log-line ${typeClass}">
-                <span class="log-time">${l.time || ""}</span>
-                <span class="log-text">${escapeHtml(l.text)}</span>
-            </div>
-        `;
-    }).join("");
-
-    const container = $("logs-container");
-    if (container) container.scrollTop = container.scrollHeight;
+  const fingerprint = logs.length ? `${logs.length}:${logs[logs.length - 1].index}` : "0";
+  if (fingerprint === lastLogFingerprint) return;
+  lastLogFingerprint = fingerprint;
+  $("#log-count").textContent = logs.length;
+  const list = $("#log-list");
+  list.replaceChildren();
+  if (!logs.length) {
+    list.append(emptyMessage("Waiting for a robot command…"));
+    return;
+  }
+  logs.forEach((log) => {
+    const row = document.createElement("div");
+    row.className = "log-line";
+    const time = document.createElement("span");
+    time.className = "log-time";
+    time.textContent = log.time || "--:--:--";
+    const text = document.createElement("span");
+    text.className = "log-text";
+    text.textContent = log.text || "";
+    row.append(time, text);
+    list.append(row);
+  });
+  list.scrollTop = list.scrollHeight;
 }
 
-function toggleLogsPanel() {
-    const container = $("logs-container");
-    const chevron = $("logs-chevron");
-    if (container) container.classList.toggle("hidden");
-    if (chevron) chevron.classList.toggle("collapsed");
+function renderHistory(history) {
+  const fingerprint = history.map((run) => `${run.run_id}:${run.status}:${run.exit_code}`).join("|");
+  if (fingerprint === lastHistoryFingerprint) return;
+  lastHistoryFingerprint = fingerprint;
+  $("#history-count").textContent = `${history.length} ${history.length === 1 ? "run" : "runs"}`;
+  const list = $("#history-list");
+  list.replaceChildren();
+  if (!history.length) {
+    list.append(emptyMessage("Completed motions will appear here."));
+    return;
+  }
+  history.forEach((run) => {
+    const item = document.createElement("article");
+    item.className = "history-item";
+    const top = document.createElement("div");
+    top.className = "history-top";
+    const skill = document.createElement("span");
+    skill.className = "history-skill";
+    skill.textContent = displayName(run.skill);
+    const status = document.createElement("span");
+    status.className = "history-status";
+    status.textContent = run.status;
+    top.append(skill, status);
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    const start = formatDate(run.started_at);
+    const finish = formatDate(run.finished_at);
+    meta.textContent = `${start} → ${finish} · exit ${run.exit_code ?? "n/a"}`;
+    item.append(top, meta);
+    list.append(item);
+  });
 }
 
-function clearLogs(e) {
-    if (e) e.stopPropagation();
-    const logContent = $("log-content");
-    if (logContent) logContent.innerHTML = "";
-    lastLogCount = 0;
-    showToast("Logs cleared", "info");
+function renderScrewdriver(available) {
+  const card = $("#screwdriver-card");
+  const copy = $("#screwdriver-copy");
+  copy.textContent = available ? "Policy ready via API" : "Learned policy coming soon";
+  card.classList.toggle("policy-ready", Boolean(available));
 }
 
-/* ─── Agora Integration Helpers ────────────────────────────── */
-function copyAgoraEndpoint() {
-    const url = "POST /api/agora/tool/run_screwdriver_skill";
-    navigator.clipboard.writeText(url)
-        .then(() => showToast("Copied Agora endpoint path!", "success"))
-        .catch(() => showToast("Failed to copy", "error"));
+function renderScan(scan) {
+  if (!scan || !scan.target) return;
+  $("#scan-current-target").textContent = scan.target;
+  $("#scan-current-angle").textContent = scan.angle === null || scan.angle === undefined ? "—" : `${scan.angle}°`;
+  const result = scan.found === true ? "Found" : (scan.found === false ? "Not found" : "Scanning");
+  $("#scan-current-result").textContent = scan.confidence ? `${result} · ${scan.confidence}` : result;
+  $("#scan-current-message").textContent = scan.message || "Scanning…";
+  const badge = $("#scan-result-badge");
+  badge.textContent = result;
+  badge.className = `voice-state ${scan.found === true ? "connected" : (scan.found === false ? "error" : "connecting")}`;
+  if (scan.image_path) {
+    const image = $("#scan-image");
+    image.src = `${scan.image_path}?v=${Date.now()}`;
+    image.classList.remove("hidden");
+    $("#scan-image-empty").classList.add("hidden");
+  }
 }
 
-/* ─── Toast System ─────────────────────────────────────────── */
+function toggleLogs() {
+  const toggle = $("#logs-toggle");
+  const body = $("#logs-body");
+  const expanded = toggle.getAttribute("aria-expanded") === "true";
+  toggle.setAttribute("aria-expanded", String(!expanded));
+  body.classList.toggle("closed", expanded);
+}
+
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+  const button = $("#mic-button");
+  button.classList.remove("hidden");
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+
+  recognition.onstart = () => setListening(true);
+  recognition.onend = () => setListening(false);
+  recognition.onerror = (event) => {
+    setListening(false);
+    if (event.error === "network") {
+      showToast("Browser transcription is unavailable. Type your request or use Connect voice below.", "error");
+      $("#intent-input").focus();
+    } else if (event.error !== "aborted") {
+      showToast(`Microphone: ${event.error}`, "error");
+    }
+  };
+  recognition.onresult = (event) => {
+    let transcript = "";
+    let isFinal = false;
+    for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      transcript += event.results[index][0].transcript;
+      isFinal ||= event.results[index].isFinal;
+    }
+    $("#intent-input").value = transcript.trim();
+    if (isFinal && transcript.trim()) $("#intent-form").requestSubmit();
+  };
+  button.addEventListener("click", () => {
+    if (isListening) recognition.stop();
+    else recognition.start();
+  });
+}
+
+function setListening(value) {
+  isListening = value;
+  $("#mic-button").classList.toggle("listening", value);
+  $("#speech-status").classList.toggle("hidden", !value);
+}
+
+function displayName(value = "") {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function emptyMessage(text) {
+  const paragraph = document.createElement("p");
+  paragraph.className = "empty-state";
+  paragraph.textContent = text;
+  return paragraph;
+}
+
 function showToast(message, type = "info") {
-    const container = $("toast-container");
-    if (!container) return;
-
-    const toast = document.createElement("div");
-    toast.className = "toast";
-    toast.textContent = message;
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        if (toast.parentNode) toast.parentNode.removeChild(toast);
-    }, 3000);
-}
-
-function escapeHtml(str) {
-    if (!str) return "";
-    return str
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+  if (!message) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  $("#toast-region").append(toast);
+  window.setTimeout(() => toast.remove(), 3600);
 }
