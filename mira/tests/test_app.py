@@ -250,9 +250,9 @@ def test_browser_joins_agora_with_channel_before_token():
     assert "client.join(session.app_id, session.channel, session.token, session.uid)" in source
 
 
-def test_scan_results_are_spoken_by_agora_and_web_fallback():
+def test_scan_results_are_spoken_by_agora_not_browser_fallback():
     source = (mira.STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert "speechSynthesis.speak(utterance)" in source
+    assert "speechSynthesis" not in source
     assert "After it returns, always speak its message" in mira.AGORA_SYSTEM_PROMPT
 
 
@@ -293,22 +293,26 @@ class FakeScanProcess:
         return 0
 
 
-def test_scan_stops_at_first_match_and_reports_direction():
+def test_scan_saves_first_match_then_finishes_all_positions():
     manager = fresh_manager()
     process = FakeScanProcess()
+    captures = []
     checks = [
         {"found": False, "confidence": "low"},
         {"found": True, "confidence": "high"},
+        {"found": False, "confidence": "low"},
+        {"found": False, "confidence": "low"},
     ]
     with (
         patch.object(mira, "SCAN_CAPTURE_SCHEDULE", ((0, -30), (0, -10), (0, 10), (0, 30))),
         patch.object(mira, "SCAN_REPLAY_COMPLETION_GRACE_SECONDS", 0),
         patch.object(mira, "_launch_scan_replay", return_value=process),
-        patch.object(mira, "capture_scan_image", side_effect=lambda index, angle: f"/static/scans/scan_{index}_{angle}.jpg"),
+        patch.object(mira, "capture_scan_image", side_effect=lambda index, angle: captures.append((index, angle)) or f"/static/scans/scan_{index}_{angle}.jpg"),
         patch.object(mira, "vision_target_check", side_effect=checks),
         patch.object(mira.os, "killpg"),
     ):
         result = mira.scan_for_target("red bottle")
+    assert captures == [(1, -30), (2, -10), (3, 10), (4, 30)]
     assert result["found"] is True
     assert result["angle"] == -10
     assert result["confidence"] == "high"

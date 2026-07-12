@@ -796,6 +796,7 @@ def scan_for_target(target: str) -> dict[str, Any]:
     started_at = manager.last_run_started_at or RobotRunManager._now()
     result: dict[str, Any]
     process: subprocess.Popen[str] | None = None
+    best_match: dict[str, Any] | None = None
     try:
         process = _launch_scan_replay()
         with manager.lock:
@@ -823,15 +824,16 @@ def scan_for_target(target: str) -> dict[str, Any]:
                 f"Vision position {index}: confidence={check.get('confidence', 'low')}; "
                 f"{check.get('reason', 'No reason returned.')}"
             )
-            if check.get("found"):
-                exit_code = _stop_scan_replay(process)
-                result = {
-                    "success": True, "found": True, "target": normalized_target,
+            if check.get("found") and best_match is None:
+                best_match = {
                     "angle": angle, "confidence": str(check.get("confidence", "high")),
-                    "image_path": image_url, "exit_code": exit_code,
-                    "message": f"I found {_spoken_target(normalized_target)} {_scan_direction(angle)}.",
+                    "image_path": image_url,
                 }
-                break
+                manager.update_scan(
+                    found=True,
+                    confidence=best_match["confidence"],
+                    message=f"Target found at position {index}; completing the scan and returning to center.",
+                )
         else:
             completed, exit_code = _wait_for_scan_replay(process)
             if not completed:
@@ -841,12 +843,19 @@ def scan_for_target(target: str) -> dict[str, Any]:
                 }
                 manager.finish_scan(result, started_at=started_at)
                 return result
-            result = {
-                "success": True, "found": False, "target": normalized_target,
-                "confidence": "low", "image_path": manager.scan_state.get("image_path"),
-                "exit_code": exit_code,
-                "message": f"I scanned the area but did not confidently find {_spoken_target(normalized_target)}.",
-            }
+            if best_match is not None:
+                result = {
+                    "success": True, "found": True, "target": normalized_target,
+                    **best_match, "exit_code": exit_code,
+                    "message": f"I found {_spoken_target(normalized_target)} {_scan_direction(best_match['angle'])}.",
+                }
+            else:
+                result = {
+                    "success": True, "found": False, "target": normalized_target,
+                    "confidence": "low", "image_path": manager.scan_state.get("image_path"),
+                    "exit_code": exit_code,
+                    "message": f"I scanned the area but did not confidently find {_spoken_target(normalized_target)}.",
+                }
     except Exception as exc:
         if process is not None:
             _stop_scan_replay(process)
