@@ -93,7 +93,7 @@ An unsupported request receives a friendly response and triggers `shake_no` when
 
 Mira recognizes commands such as “find the microphone,” “look for the screwdriver,” “do you see a person wearing a hat?”, and “scan for a red bottle.” The same target extraction is available through the text-intent API and Agora's `scan_for_target` custom tool.
 
-Mira replays `local/motion_scan_10s` episode `0` and captures one camera frame at each of the recording's four pauses (approximately 3.0, 5.5, 8.8, and 10.5 seconds). Captures are corrected 90° counterclockwise, written to `static/scans/`, and checked with `gemini-3.1-flash-lite`. A confident match ends the replay early; otherwise all four positions are checked and the recording returns the base to center.
+Mira replays `local/motion_scan_10s` episode `0` and captures one camera frame at each of the recording's four pauses (approximately 3.0, 5.5, 8.8, and 10.5 seconds). Captures are corrected 90° counterclockwise, written to `static/scans/`, and checked with `gemini-3.1-flash-lite`. A confident match ends the replay early; otherwise all four positions are checked and LeRobot is allowed to finish the complete 14.8-second recording and return the base to center. The completion wait deliberately excludes variable `conda` startup time.
 
 Keep the API key server-side in `.env` and never put it in browser JavaScript:
 

@@ -296,7 +296,7 @@ def test_scan_stops_at_first_match_and_reports_direction():
     ]
     with (
         patch.object(mira, "SCAN_CAPTURE_SCHEDULE", ((0, -30), (0, -10), (0, 10), (0, 30))),
-        patch.object(mira, "SCAN_REPLAY_DURATION_SECONDS", 0),
+        patch.object(mira, "SCAN_REPLAY_COMPLETION_GRACE_SECONDS", 0),
         patch.object(mira, "_launch_scan_replay", return_value=process),
         patch.object(mira, "capture_scan_image", side_effect=lambda index, angle: f"/static/scans/scan_{index}_{angle}.jpg"),
         patch.object(mira, "vision_target_check", side_effect=checks),
@@ -316,7 +316,7 @@ def test_scan_not_found_checks_all_angles_and_returns_to_completed_state():
     captures = []
     with (
         patch.object(mira, "SCAN_CAPTURE_SCHEDULE", ((0, -30), (0, -10), (0, 10), (0, 30))),
-        patch.object(mira, "SCAN_REPLAY_DURATION_SECONDS", 0),
+        patch.object(mira, "SCAN_REPLAY_COMPLETION_GRACE_SECONDS", 0),
         patch.object(mira, "_launch_scan_replay", return_value=process),
         patch.object(mira, "capture_scan_image", side_effect=lambda index, angle: captures.append((index, angle)) or f"/static/scans/{index}.jpg"),
         patch.object(mira, "vision_target_check", return_value={"found": False, "confidence": "low"}),

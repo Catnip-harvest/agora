@@ -46,7 +46,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 # Capture during the four plateaus in the 14.8-second recorded sweep. The
 # direction values are user-facing approximations; motion comes from the replay.
 SCAN_CAPTURE_SCHEDULE: tuple[tuple[float, int], ...] = ((3.0, -30), (5.5, -10), (8.8, 10), (10.5, 30))
-SCAN_REPLAY_DURATION_SECONDS = 14.8
+SCAN_REPLAY_COMPLETION_GRACE_SECONDS = 10.0
 SCAN_CAMERA_PATH = os.getenv(
     "SCAN_CAMERA_PATH",
     "/dev/v4l/by-id/usb-DSJ-250318-J_DSJ-2062-309-video-index0",
@@ -760,6 +760,19 @@ def _wait_until_capture(started: float, capture_at: float) -> bool:
     return remaining > 0 and manager.scan_cancel_event.wait(remaining)
 
 
+def _wait_for_scan_replay(process: subprocess.Popen[str]) -> tuple[bool, int | None]:
+    """Allow the recorded replay to finish without counting conda startup time."""
+    deadline = time.monotonic() + SCAN_REPLAY_COMPLETION_GRACE_SECONDS
+    while time.monotonic() < deadline:
+        if manager.scan_cancel_event.wait(0.1):
+            return False, _stop_scan_replay(process)
+        exit_code = process.poll()
+        if exit_code is not None:
+            return True, exit_code
+    # Some conda wrappers remain alive after the robot motion is complete.
+    return True, _stop_scan_replay(process)
+
+
 def scan_for_target(target: str) -> dict[str, Any]:
     """Run one privacy-checked visual scan and return the best target result."""
     allowed, normalized_target, refusal = validate_scan_target(target)
@@ -820,18 +833,14 @@ def scan_for_target(target: str) -> dict[str, Any]:
                 }
                 break
         else:
-            if _wait_until_capture(replay_started, SCAN_REPLAY_DURATION_SECONDS) or manager.scan_cancel_event.is_set():
+            completed, exit_code = _wait_for_scan_replay(process)
+            if not completed:
                 result = {
                     "success": True, "found": False, "target": normalized_target,
                     "status": "stopped", "message": "I stopped the visual scan.",
                 }
-                _stop_scan_replay(process)
                 manager.finish_scan(result, started_at=started_at)
                 return result
-            # The recording has now completed its return-to-center segment. Stop
-            # the conda wrapper explicitly; it can otherwise remain alive while
-            # the follower continues holding its final pose.
-            exit_code = _stop_scan_replay(process)
             result = {
                 "success": True, "found": False, "target": normalized_target,
                 "confidence": "low", "image_path": manager.scan_state.get("image_path"),
