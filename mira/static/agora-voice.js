@@ -1,10 +1,18 @@
 const connectButton = document.querySelector("#agora-connect-button");
 const disconnectButton = document.querySelector("#agora-disconnect-button");
+const muteButton = document.querySelector("#agora-mute-button");
 const stateElement = document.querySelector("#agora-voice-state");
 const messageElement = document.querySelector("#agora-voice-message");
 
 let client = null;
 let microphoneTrack = null;
+let isMuted = false;
+
+function renderMuteState() {
+  muteButton.textContent = isMuted ? "Unmute mic" : "Mute mic";
+  muteButton.setAttribute("aria-pressed", String(isMuted));
+  muteButton.classList.toggle("muted", isMuted);
+}
 
 function setVoiceState(state, message) {
   stateElement.textContent = state;
@@ -35,6 +43,9 @@ async function connectVoice() {
     microphoneTrack = await AgoraRTC.createMicrophoneAudioTrack();
     await client.publish([microphoneTrack]);
     disconnectButton.disabled = false;
+    muteButton.disabled = false;
+    isMuted = false;
+    renderMuteState();
     setVoiceState("Connected", "Microphone connected. Speak naturally to Mira.");
   } catch (error) {
     setVoiceState("Error", error.message || "Could not connect to Agora voice.");
@@ -54,12 +65,33 @@ async function disconnectVoice() {
   } finally {
     microphoneTrack = null;
     client = null;
+    isMuted = false;
+    renderMuteState();
     connectButton.disabled = false;
+    muteButton.disabled = true;
     disconnectButton.disabled = true;
     if (!stateElement.classList.contains("error")) setVoiceState("Offline", "Voice session disconnected.");
   }
 }
 
+async function toggleMute() {
+  if (!microphoneTrack) return;
+  try {
+    isMuted = !isMuted;
+    await microphoneTrack.setEnabled(!isMuted);
+    renderMuteState();
+    setVoiceState(
+      isMuted ? "Muted" : "Connected",
+      isMuted ? "Microphone muted. Mira cannot hear background noise." : "Microphone live. Speak naturally to Mira.",
+    );
+  } catch (error) {
+    isMuted = !isMuted;
+    renderMuteState();
+    setVoiceState("Error", error.message || "Could not change microphone state.");
+  }
+}
+
 connectButton?.addEventListener("click", connectVoice);
 disconnectButton?.addEventListener("click", disconnectVoice);
+muteButton?.addEventListener("click", toggleMute);
 window.addEventListener("beforeunload", () => { microphoneTrack?.close(); client?.leave(); });

@@ -71,6 +71,7 @@
         <p>Connect your microphone to the Agora agent. Its tool calls control Mira and the live telemetry below shows the physical result.</p>
         <div class="voice-actions">
           <button id="agora-connect-button" class="send-button" type="button">Connect voice <span>◉</span></button>
+          <button id="agora-mute-button" class="voice-disconnect voice-mute" type="button" disabled aria-pressed="false">Mute mic</button>
           <button id="agora-disconnect-button" class="voice-disconnect" type="button" disabled>Disconnect</button>
         </div>
         <p id="agora-voice-message" class="voice-message">Start the local server, then connect when you are ready to speak.</p>
@@ -169,6 +170,6 @@
 
   <div id="toast-region" class="toast-region" aria-live="assertive"></div>
   <script src="/static/app.js?v=5"></script>
-  <script type="module" src="/static/agora-voice.js?v=2"></script>
+  <script type="module" src="/static/agora-voice.js?v=3"></script>
 </body>
 </html>

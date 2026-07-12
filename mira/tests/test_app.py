@@ -250,6 +250,7 @@ def test_agora_tokens_use_current_v007_format():
 def test_browser_joins_agora_with_channel_before_token():
     source = (mira.STATIC_DIR / "agora-voice.js").read_text(encoding="utf-8")
     assert "client.join(session.app_id, session.channel, session.token, session.uid)" in source
+    assert "microphoneTrack.setEnabled(!isMuted)" in source
 
 
 def test_scan_results_are_spoken_by_agora_not_browser_fallback():

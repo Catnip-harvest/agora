@@ -84,6 +84,7 @@ h2 { margin: 6px 0 0; font-size: clamp(1.25rem, 3vw, 1.7rem); letter-spacing: -.
 .voice-state.connecting { color: #8cedf8; border-color: rgba(37,217,238,.35); background: rgba(37,217,238,.08); }
 .voice-state.error { color: #ff97a6; border-color: rgba(255,69,95,.35); background: rgba(255,69,95,.08); }
 .voice-actions { display: flex; gap: 10px; align-items: center; }.voice-disconnect { height: 46px; padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.04); cursor: pointer; font-size: .8rem; font-weight: 750; }.voice-disconnect:disabled { opacity: .4; cursor: not-allowed; }.voice-message { margin-bottom: 0 !important; color: #7e8799 !important; font-size: .73rem !important; }
+.voice-mute.muted { color: #ffb1bd; border-color: rgba(255,69,95,.4); background: rgba(255,69,95,.1); }
 
 .vision-panel { padding: clamp(20px, 4vw, 34px); border-color: rgba(55,230,161,.2); }
 .scan-form { display: grid; grid-template-columns: 1fr auto; gap: 9px; margin-top: 22px; }.scan-form input { min-width: 0; height: 48px; padding: 0 15px; border: 1px solid rgba(255,255,255,.12); border-radius: 11px; outline: 0; color: var(--text); background: rgba(4,6,13,.66); }.scan-form input:focus { border-color: rgba(55,230,161,.55); box-shadow: 0 0 0 3px rgba(55,230,161,.08); }
