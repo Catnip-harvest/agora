@@ -75,7 +75,7 @@ def test_every_gesture_builds_exact_camera_free_replay_command():
 def test_demo_launcher_checks_robot_and_wrist_camera_devices():
     source = (mira.BASE_DIR / "run_demo.sh").read_text(encoding="utf-8")
     assert "/dev/ttyACM0" in source
-    assert "/dev/ttyACM1" in source
+    assert "LEADER_PORT" not in source
     assert "DSJ-2062-309" in source
     assert "sudo chmod 666" in source
     assert "conda run --no-capture-output -n lerobot uvicorn" in source
@@ -84,7 +84,7 @@ def test_demo_launcher_checks_robot_and_wrist_camera_devices():
 def test_scan_motion_builds_exact_recorded_replay_command():
     assert mira.build_scan_motion_command() == [
         "conda", "run", "--no-capture-output", "-n", "lerobot", "lerobot-replay",
-        "--robot.type=so101_follower", "--robot.port=/dev/ttyACM1",
+        "--robot.type=so101_follower", "--robot.port=/dev/ttyACM0",
         "--robot.id=my_follower", "--robot.disable_torque_on_disconnect=false",
         "--dataset.repo_id=local/motion_scan_10s", "--dataset.episode=0",
     ]

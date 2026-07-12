@@ -55,7 +55,7 @@ SCAN_CAMERA_PATH = os.getenv(
 SCAN_CAMERA_ROTATION = os.getenv("SCAN_CAMERA_ROTATION", "90_ccw")
 
 ROBOT_TYPE = "so101_follower"
-ROBOT_PORT = os.getenv("ROBOT_PORT", "/dev/ttyACM1")
+ROBOT_PORT = os.getenv("ROBOT_PORT", "/dev/ttyACM0")
 ROBOT_ID = "my_follower"
 
 GESTURES: dict[str, dict[str, Any]] = {
@@ -284,7 +284,7 @@ def build_screwdriver_command() -> list[str]:
     """Return the future learned-policy command. It is gated by POLICY_READY."""
     # Future command (intentionally unavailable unless POLICY_READY=true):
     # cd ~/lerobot && conda run -n lerobot lerobot-record \
-    #   --robot.type=so101_follower --robot.port=/dev/ttyACM1 \
+    #   --robot.type=so101_follower --robot.port=/dev/ttyACM0 \
     #   --robot.id=my_follower --robot.max_relative_target=5 \
     #   --robot.disable_torque_on_disconnect=false \
     #   --robot.cameras='{camera1: {...}, camera2: {...}}' \
