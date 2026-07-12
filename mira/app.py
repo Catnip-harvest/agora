@@ -55,7 +55,7 @@ SCAN_CAMERA_PATH = os.getenv(
 SCAN_CAMERA_ROTATION = os.getenv("SCAN_CAMERA_ROTATION", "90_ccw")
 
 ROBOT_TYPE = "so101_follower"
-ROBOT_PORT = "/dev/ttyACM1"
+ROBOT_PORT = os.getenv("ROBOT_PORT", "/dev/ttyACM1")
 ROBOT_ID = "my_follower"
 
 GESTURES: dict[str, dict[str, Any]] = {

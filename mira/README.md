@@ -24,6 +24,26 @@ Each gesture runs in the background as a camera-free `lerobot-replay` process. O
 
 ## Install and run
 
+For a demo, connect both SO-101 USB serial devices and the DSJ-2062-309 wrist camera, then use the hardware-aware launcher:
+
+```bash
+cd /home/viz/Downloads/agora/mira
+./run_demo.sh
+```
+
+The launcher requires ACM0, ACM1, and the configured wrist camera, grants access to their actual device nodes, and starts Uvicorn in the `lerobot` environment. It exits before startup if a cable or device is missing. To install persistent demo permissions once:
+
+```bash
+cd /home/viz/Downloads/agora/mira
+./install_demo_udev_rules.sh
+```
+
+This one-time command requires `sudo`; reconnect the USB devices after it completes. The application itself never runs as root. Override the verified hardware mapping only when necessary:
+
+```bash
+ROBOT_PORT=/dev/ttyACM1 LEADER_PORT=/dev/ttyACM0 ./run_demo.sh
+```
+
 ```bash
 cd /home/viz/Downloads/agora/mira
 python -m pip install -r requirements.txt
