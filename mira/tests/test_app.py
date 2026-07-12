@@ -74,7 +74,7 @@ def test_every_gesture_builds_exact_camera_free_replay_command():
 
 def test_scan_motion_builds_exact_recorded_replay_command():
     assert mira.build_scan_motion_command() == [
-        "conda", "run", "-n", "lerobot", "lerobot-replay",
+        "conda", "run", "--no-capture-output", "-n", "lerobot", "lerobot-replay",
         "--robot.type=so101_follower", "--robot.port=/dev/ttyACM1",
         "--robot.id=my_follower", "--robot.disable_torque_on_disconnect=false",
         "--dataset.repo_id=local/motion_scan_10s", "--dataset.episode=0",
@@ -284,7 +284,7 @@ def test_scan_refuses_identity_and_sensitive_traits_without_touching_hardware():
 class FakeScanProcess:
     def __init__(self):
         self.pid = 9001
-        self.stdout = io.StringIO("")
+        self.stdout = io.StringIO("INFO Replaying episode\n")
         self.returncode = None
 
     def poll(self):

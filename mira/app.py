@@ -47,6 +47,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 # direction values are user-facing approximations; motion comes from the replay.
 SCAN_CAPTURE_SCHEDULE: tuple[tuple[float, int], ...] = ((3.0, -30), (5.5, -10), (8.8, 10), (10.5, 30))
 SCAN_REPLAY_COMPLETION_GRACE_SECONDS = 10.0
+SCAN_REPLAY_READY_TIMEOUT_SECONDS = 12.0
 SCAN_CAMERA_PATH = os.getenv(
     "SCAN_CAMERA_PATH",
     "/dev/v4l/by-id/usb-DSJ-250318-J_DSJ-2062-309-video-index0",
@@ -269,7 +270,7 @@ def build_scan_motion_command() -> list[str]:
     """Build the replay command for the user's recorded four-stop scan."""
     skill = SKILL_MAP["run_scan_motion_skill"]
     return [
-        "conda", "run", "-n", "lerobot", "lerobot-replay",
+        "conda", "run", "--no-capture-output", "-n", "lerobot", "lerobot-replay",
         f"--robot.type={ROBOT_TYPE}",
         f"--robot.port={ROBOT_PORT}",
         f"--robot.id={ROBOT_ID}",
@@ -716,10 +717,12 @@ def _launch_scan_replay() -> subprocess.Popen[str]:
     )
 
 
-def _collect_scan_logs(process: subprocess.Popen[str]) -> None:
+def _collect_scan_logs(process: subprocess.Popen[str], replay_ready: threading.Event) -> None:
     if process.stdout is not None:
         for line in process.stdout:
             manager.append_log(line)
+            if "Replaying episode" in line:
+                replay_ready.set()
 
 
 def _stop_scan_replay(process: subprocess.Popen[str]) -> int | None:
@@ -785,7 +788,11 @@ def scan_for_target(target: str) -> dict[str, Any]:
         process = _launch_scan_replay()
         with manager.lock:
             manager.process = process
-        threading.Thread(target=_collect_scan_logs, args=(process,), daemon=True).start()
+        replay_ready = threading.Event()
+        threading.Thread(target=_collect_scan_logs, args=(process, replay_ready), daemon=True).start()
+        if not replay_ready.wait(SCAN_REPLAY_READY_TIMEOUT_SECONDS):
+            raise RuntimeError("LeRobot did not report that episode replay started.")
+        manager.append_log("Replay timing synchronized; starting four-position capture schedule.")
         replay_started = time.monotonic()
         for index, (capture_at, angle) in enumerate(SCAN_CAPTURE_SCHEDULE, start=1):
             if _wait_until_capture(replay_started, capture_at) or manager.scan_cancel_event.is_set():
@@ -982,6 +989,7 @@ async def api_robot_stop() -> dict[str, Any]:
 
 @app.post("/api/scan")
 async def api_scan(request: ScanRequest):
+    manager.append_log("Visual scan requested from the web control panel.")
     result = await asyncio.to_thread(scan_for_target, request.target)
     status_code = 409 if result.get("status") == "busy" else (400 if result.get("status") == "refused" else 200)
     return result if status_code == 200 else JSONResponse(result, status_code=status_code)
@@ -1044,6 +1052,7 @@ async def agora_shake_no() -> dict[str, Any]:
 @app.post("/api/agora/tool/scan_for_target")
 async def agora_scan_for_target(request: ScanRequest) -> dict[str, Any]:
     """Agora tool wrapper around the same privacy-checked scan implementation."""
+    manager.append_log("Visual scan requested by the Agora voice agent.")
     return await asyncio.to_thread(scan_for_target, request.target)
 
 
